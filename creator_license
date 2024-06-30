@@ -1,0 +1,18 @@
+SELECT
+    u.name AS username,
+    u.id AS user_id
+FROM
+    users u
+LEFT JOIN (
+    SELECT DISTINCT
+        he.user_id
+    FROM
+        historical_events he
+    WHERE
+        he.event_type IN ('publish_workbook', 'create_datasource', 'modify_workbook', 'modify_datasource', 'delete_workbook', 'delete_datasource')
+) ca ON u.id = ca.user_id
+WHERE
+    u.site_role = 'Creator'
+    AND ca.user_id IS NULL
+ORDER BY
+    u.name;
