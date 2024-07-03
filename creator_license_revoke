@@ -1,0 +1,85 @@
+import tableauserverclient as TSC
+import pyodbc
+from datetime import datetime, timedelta
+
+# Define server details and credentials
+TABLEAU_SERVER_URL = 'https://your-tableau-server-url'
+USERNAME = 'your-username'
+PASSWORD = 'your-password'
+SITE_ID = ''  # Default site, use '' if not using a specific site
+TOKEN_NAME = 'your-token-name'  # If using personal access tokens
+TOKEN_VALUE = 'your-token-value'  # If using personal access tokens
+
+# SQL Server connection details
+SQL_SERVER = 'your-sql-server'
+DATABASE = 'your-database'
+TABLE_NAME = 'your-table-name'
+SQL_USERNAME = 'your-sql-username'
+SQL_PASSWORD = 'your-sql-password'
+
+# Connect to SQL Server
+conn_str = f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER};DATABASE={DATABASE};UID={SQL_USERNAME};PWD={SQL_PASSWORD}'
+conn = pyodbc.connect(conn_str)
+cursor = conn.cursor()
+
+# Authenticate with Tableau Server
+tableau_auth = TSC.TableauAuth(USERNAME, PASSWORD, site_id=SITE_ID)
+server = TSC.Server(TABLEAU_SERVER_URL, use_server_version=True)
+
+# Authenticate using personal access token if preferred
+# tableau_auth = TSC.PersonalAccessTokenAuth(TOKEN_NAME, TOKEN_VALUE, site_id=SITE_ID)
+
+def get_users_with_creator_license():
+    with server.auth.sign_in(tableau_auth):
+        # Fetch all users
+        all_users, pagination_item = server.users.get()
+        
+        # Filter users with Creator license and not logged in for the last 45 days
+        creator_users = []
+        for user in all_users:
+            if user.site_role == 'Creator':
+                if user.last_login is not None:
+                    last_login_date = datetime.strptime(user.last_login, '%Y-%m-%dT%H:%M:%SZ')
+                    if last_login_date < datetime.utcnow() - timedelta(days=45):
+                        creator_users.append(user)
+                else:
+                    # If the user has never logged in
+                    creator_users.append(user)
+        
+        return creator_users
+
+def update_user_license(user):
+    user.site_role = 'Explorer'
+    server.users.update(user)
+
+def insert_into_sql(username, email, last_login_date, license_revoked_date):
+    insert_query = f'''
+    INSERT INTO {TABLE_NAME} (username, email, last_login_date, license_revoked_date)
+    VALUES (?, ?, ?, ?)
+    '''
+    cursor.execute(insert_query, username, email, last_login_date, license_revoked_date)
+    conn.commit()
+
+if __name__ == "__main__":
+    creator_users = get_users_with_creator_license()
+    
+    print(f"Found {len(creator_users)} users with a Creator license who haven't logged in the last 45 days:")
+    for user in creator_users:
+        print(f"Username: {user.name}, Last Login: {user.last_login}, Email: {user.email}")
+        
+        # Update user's license from Creator to Explorer
+        try:
+            update_user_license(user)
+            print(f"Updated {user.name} to Explorer license.")
+            
+            # Insert into SQL Server
+            last_login_date = user.last_login if user.last_login else 'Never'
+            license_revoked_date = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            insert_into_sql(user.name, user.email, last_login_date, license_revoked_date)
+            print(f"Inserted {user.name} into SQL Server.")
+        except Exception as e:
+            print(f"Failed to update {user.name}: {e}")
+
+# Close SQL Server connection
+cursor.close()
+conn.close()
