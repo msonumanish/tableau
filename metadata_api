@@ -19,7 +19,7 @@ server = TSC.Server(TABLEAU_SERVER_URL, use_server_version=True)
 # Authenticate using personal access token if preferred
 # tableau_auth = TSC.PersonalAccessTokenAuth(TOKEN_NAME, TOKEN_VALUE, site_id=SITE_ID)
 
-# Query to fetch database name, type, table names, and column names
+# Query to fetch database name, type, table names, column names, and extract size
 METADATA_QUERY = """
 {
   databases {
@@ -30,6 +30,20 @@ METADATA_QUERY = """
       columns {
         name
       }
+    }
+  }
+  workbooks {
+    id
+    name
+    extract {
+      size
+    }
+  }
+  datasources {
+    id
+    name
+    extract {
+      size
     }
   }
 }
@@ -57,7 +71,7 @@ def get_workbooks_and_datasources():
         
         return all_workbooks, all_datasources
 
-def print_connections(item, item_type):
+def print_connections(item, item_type, metadata_result):
     print(f"\n{item_type}: {item.name} (ID: {item.id})")
     server.connections.populate(item)
     for connection in item.connections:
@@ -68,7 +82,6 @@ def print_connections(item, item_type):
         
         # Fetch and print table and column names using Metadata API
         try:
-            metadata_result = run_metadata_query(METADATA_QUERY)
             databases = metadata_result['data']['databases']
             for db in databases:
                 if db['name'] == connection.dbname:
@@ -82,16 +95,41 @@ def print_connections(item, item_type):
                 print("    No matching database found in metadata.")
         except Exception as e:
             print(f"    Failed to fetch tables and columns using Metadata API: {e}")
+    
+    # Fetch and print extract size if available
+    if item_type == "Workbook":
+        workbooks = metadata_result['data']['workbooks']
+        for workbook in workbooks:
+            if workbook['id'] == item.id:
+                extract_size = workbook.get('extract', {}).get('size')
+                if extract_size is not None:
+                    print(f"    Extract Size: {extract_size} bytes")
+                else:
+                    print(f"    No extract found")
+                break
+    elif item_type == "Data Source":
+        datasources = metadata_result['data']['datasources']
+        for datasource in datasources:
+            if datasource['id'] == item.id:
+                extract_size = datasource.get('extract', {}).get('size')
+                if extract_size is not None:
+                    print(f"    Extract Size: {extract_size} bytes")
+                else:
+                    print(f"    No extract found")
+                break
 
 if __name__ == "__main__":
     workbooks, datasources = get_workbooks_and_datasources()
     
     print(f"Found {len(workbooks)} workbooks and {len(datasources)} data sources.")
     
+    # Run metadata query once to use for all items
+    metadata_result = run_metadata_query(METADATA_QUERY)
+    
     # Print connection details for each workbook
     for workbook in workbooks:
-        print_connections(workbook, "Workbook")
+        print_connections(workbook, "Workbook", metadata_result)
         
     # Print connection details for each data source
     for datasource in datasources:
-        print_connections(datasource, "Data Source")
+        print_connections(datasource, "Data Source", metadata_result)
