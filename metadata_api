@@ -1,0 +1,97 @@
+import tableauserverclient as TSC
+import requests
+
+# Define server details and credentials
+TABLEAU_SERVER_URL = 'https://your-tableau-server-url'
+USERNAME = 'your-username'
+PASSWORD = 'your-password'
+SITE_ID = ''  # Default site, use '' if not using a specific site
+TOKEN_NAME = 'your-token-name'  # If using personal access tokens
+TOKEN_VALUE = 'your-token-value'  # If using personal access tokens
+
+# Metadata API endpoint
+METADATA_API_URL = f'{TABLEAU_SERVER_URL}/api/metadata/graphql'
+
+# Authenticate with Tableau Server
+tableau_auth = TSC.TableauAuth(USERNAME, PASSWORD, site_id=SITE_ID)
+server = TSC.Server(TABLEAU_SERVER_URL, use_server_version=True)
+
+# Authenticate using personal access token if preferred
+# tableau_auth = TSC.PersonalAccessTokenAuth(TOKEN_NAME, TOKEN_VALUE, site_id=SITE_ID)
+
+# Query to fetch database name, type, table names, and column names
+METADATA_QUERY = """
+{
+  databases {
+    name
+    connectionType
+    tables {
+      name
+      columns {
+        name
+      }
+    }
+  }
+}
+"""
+
+def run_metadata_query(query):
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': f'Bearer {server.auth_token}'
+    }
+    response = requests.post(METADATA_API_URL, json={'query': query}, headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(f"Failed to fetch metadata: {response.status_code}, {response.text}")
+
+def get_workbooks_and_datasources():
+    with server.auth.sign_in(tableau_auth):
+        # Fetch all workbooks
+        all_workbooks, pagination_item = server.workbooks.get()
+        
+        # Fetch all data sources
+        all_datasources, pagination_item = server.datasources.get()
+        
+        return all_workbooks, all_datasources
+
+def print_connections(item, item_type):
+    print(f"\n{item_type}: {item.name} (ID: {item.id})")
+    server.connections.populate(item)
+    for connection in item.connections:
+        print(f"  Connection: {connection.id}")
+        print(f"    Type: {connection.connection_type}")
+        print(f"    Server Address: {connection.server_address}")
+        print(f"    Database: {connection.dbname}")
+        
+        # Fetch and print table and column names using Metadata API
+        try:
+            metadata_result = run_metadata_query(METADATA_QUERY)
+            databases = metadata_result['data']['databases']
+            for db in databases:
+                if db['name'] == connection.dbname:
+                    print(f"    Database Type: {db['connectionType']}")
+                    for table in db['tables']:
+                        print(f"    Table: {table['name']}")
+                        columns = [column['name'] for column in table['columns']]
+                        print(f"      Columns: {', '.join(columns) if columns else 'No columns found'}")
+                    break
+            else:
+                print("    No matching database found in metadata.")
+        except Exception as e:
+            print(f"    Failed to fetch tables and columns using Metadata API: {e}")
+
+if __name__ == "__main__":
+    workbooks, datasources = get_workbooks_and_datasources()
+    
+    print(f"Found {len(workbooks)} workbooks and {len(datasources)} data sources.")
+    
+    # Print connection details for each workbook
+    for workbook in workbooks:
+        print_connections(workbook, "Workbook")
+        
+    # Print connection details for each data source
+    for datasource in datasources:
+        print_connections(datasource, "Data Source")
