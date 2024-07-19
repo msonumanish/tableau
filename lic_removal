@@ -1,0 +1,105 @@
+import tableauserverclient as TSC
+import pandas as pd
+from io import StringIO
+import pyodbc
+from datetime import datetime
+
+# Define Tableau Server connection settings
+tableau_auth = TSC.TableauAuth('your_username', 'your_password', 'your_site')
+server_url = 'your_tableau_server_url'
+server = TSC.Server(server_url, use_server_version=True)
+
+# SQL Server connection settings
+sql_server_connection_string = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=your_sql_server_url;DATABASE=your_database;UID=your_db_username;PWD=your_db_password'
+table_name = 'LicenseDowngrades'
+
+
+def connect_to_tableau_server():
+    """Sign in to Tableau Server and return the server connection."""
+    server.auth.sign_in(tableau_auth)
+    return server
+
+
+def get_workbook_and_view(server, workbook_name, sheet_name):
+    """Retrieve the workbook and specific sheet view."""
+    all_workbooks, pagination_item = server.workbooks.get()
+    workbook = next(wb for wb in all_workbooks if wb.name == workbook_name)
+    server.workbooks.populate_views(workbook)
+    view = next(v for v in workbook.views if v.name == sheet_name)
+    return view
+
+
+def get_view_data(view):
+    """Retrieve data from the specified view as a DataFrame."""
+    server.views.populate_csv(view)
+    csv_data = StringIO(view.csv)
+    data_df = pd.read_csv(csv_data)
+    return data_df
+
+
+def downgrade_user_license(server, user_id, user_name, user_email):
+    """Downgrade the user's license and log the action."""
+    user = server.users.get_by_id(user_id)
+    if user.site_role == 'Creator':
+        print(f"Downgrading license for user: {user.name}")
+        user.site_role = 'Explorer'  # Set to desired lower-level role
+        server.users.update(user)
+        print(f"User {user.name} downgraded to Explorer.")
+        downgrade_date = datetime.now()
+        log_license_downgrade(user_name, user_email, downgrade_date)
+
+
+def log_license_downgrade(username, email, downgrade_date):
+    """Log the license downgrade action to SQL Server."""
+    try:
+        with pyodbc.connect(sql_server_connection_string) as conn:
+            cursor = conn.cursor()
+            # Create table if it doesn't exist
+            create_table_query = f"""
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='{table_name}' AND xtype='U')
+            CREATE TABLE {table_name} (
+                username NVARCHAR(255),
+                email NVARCHAR(255),
+                downgrade_date DATETIME
+            )
+            """
+            cursor.execute(create_table_query)
+            conn.commit()
+
+            # Insert data into the table
+            insert_query = f"""
+            INSERT INTO {table_name} (username, email, downgrade_date)
+            VALUES (?, ?, ?)
+            """
+            cursor.execute(insert_query, username, email, downgrade_date)
+            conn.commit()
+        print(f"Data inserted successfully into SQL Server for user {username}.")
+    except Exception as e:
+        print(f"Error inserting data into SQL Server: {e}")
+
+
+def main():
+    """Main function to handle the workflow."""
+    server = connect_to_tableau_server()
+    view = get_workbook_and_view(server, 'ABC', 'license data')
+    data_df = get_view_data(view)
+
+    # Print the data
+    print(data_df)
+
+    # Downgrade the users' licenses and log the action
+    for index, row in data_df.iterrows():
+        tableau_user_id = row['id']  # Assuming the CSV has a column 'id' for Tableau user ID
+        user_name = row['username']  # Assuming the CSV has a column 'username'
+        user_email = row['email']  # Assuming the CSV has a column 'email'
+        downgrade_user_license(server, tableau_user_id, user_name, user_email)
+
+    # Sign out from Tableau Server
+    server.auth.sign_out()
+
+    # Print completion message
+    print("License downgrades and logging completed.")
+
+
+if __name__ == "__main__":
+    main()
