@@ -1,0 +1,37 @@
+<!-- DATEADD Function -->
+<date-function name='DATEADD' return-type='datetime'>
+    <formula>DATEADD(%1, %2, %3)</formula>
+    <formula part='year'>DATEADD(year, %2, %3)</formula>
+    <formula part='month'>DATEADD(month, %2, %3)</formula>
+    <formula part='day'>DATEADD(day, %2, %3)</formula>
+    <formula part='hour'>DATEADD(hour, %2, %3)</formula>
+    <formula part='minute'>DATEADD(minute, %2, %3)</formula>
+    <formula part='second'>DATEADD(second, %2, %3)</formula>
+    <formula part='quarter'>DATEADD(month, %2 * 3, %3)</formula>
+    <formula part='iso-week'>DATEADD(week, %2, %3)</formula>
+    <formula part='iso-weekday'>DATEADD(day, %2, %3)</formula>
+    <formula part='iso-year'>DATEADD(year, %2, %3)</formula>
+    <formula part='iso-quarter'>DATEADD(month, %2 * 3, %3)</formula>
+    <argument type='localstr' />
+    <argument type='int' />
+    <argument type='datetime' />
+</date-function>
+
+<!-- DATEDIFF Function -->
+<date-function name='DATEDIFF' return-type='int'>
+    <formula>DATEDIFF(%1, %3, %2)</formula>
+    <formula part='year'>DATEDIFF(year, %3, %2)</formula>
+    <formula part='month'>DATEDIFF(month, %3, %2)</formula>
+    <formula part='day'>DATEDIFF(day, %3, %2)</formula>
+    <formula part='hour'>DATEDIFF(hour, %3, %2)</formula>
+    <formula part='minute'>DATEDIFF(minute, %3, %2)</formula>
+    <formula part='second'>DATEDIFF(second, %3, %2)</formula>
+    <formula part='quarter'>DATEDIFF(month, %3, %2) / 3</formula>
+    <formula part='iso-week'>DATEDIFF(week, %3, %2)</formula>
+    <formula part='iso-weekday'>DATEDIFF(day, %3, %2)</formula>
+    <formula part='iso-year'>DATEDIFF(year, %3, %2)</formula>
+    <formula part='iso-quarter'>DATEDIFF(month, %3, %2) / 3</formula>
+    <argument type='localstr' />
+    <argument type='datetime' />
+    <argument type='datetime' />
+</date-function>
