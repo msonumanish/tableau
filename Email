@@ -1,0 +1,57 @@
+import smtplib
+from email.message import EmailMessage
+from email.utils import make_msgid
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+
+def send_email_with_attachments(subject, body, sender_email, receiver_email, smtp_server, smtp_port, smtp_user, smtp_password, files=[]):
+    # Create a multipart message
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = receiver_email
+    msg['Subject'] = subject
+
+    # Attach the body with the msg instance
+    msg.attach(MIMEText(body, 'plain'))
+
+    # Attach files
+    for file in files:
+        try:
+            with open(file, 'rb') as f:
+                # Create a MIMEBase object
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(f.read())
+                
+            # Encode the payload using Base64
+            encoders.encode_base64(part)
+            
+            # Add header to the attachment
+            part.add_header('Content-Disposition', f'attachment; filename={file}')
+            
+            # Attach the instance 'part' to the message
+            msg.attach(part)
+        except Exception as e:
+            print(f"Could not attach file {file}. Error: {e}")
+
+    # Create SMTP session
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()  # Secure the connection
+        server.login(smtp_user, smtp_password)  # Login
+        server.send_message(msg)  # Send the email
+
+    print("Email sent successfully!")
+
+# Example usage:
+subject = "Test Email with Multiple Attachments"
+body = "This is an email with multiple attachments sent from Python."
+sender_email = "youremail@example.com"
+receiver_email = "recipient@example.com"
+smtp_server = "smtp.example.com"
+smtp_port = 587
+smtp_user = "youremail@example.com"
+smtp_password = "yourpassword"
+files = ["file1.pdf", "file2.jpg", "file3.txt"]  # Replace with your actual file paths
+
+send_email_with_attachments(subject, body, sender_email, receiver_email, smtp_server, smtp_port, smtp_user, smtp_password, files)
