@@ -1,0 +1,159 @@
+import tableauserverclient as TSC
+import csv
+import logging
+from datetime import datetime
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import os
+
+# Configure email settings
+SMTP_SERVER = 'smtp.mailserver.com'
+SMTP_PORT = 587
+SENDER_EMAIL = 'sender_email@example.com'
+SENDER_PASSWORD = 'your_password'
+RECIPIENT_EMAIL = 'recipient_email@example.com'
+
+# Set up logging
+log_file = 'tableau_unlicensed_removal.log'
+logging.basicConfig(
+    filename=log_file,
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Authenticate with Tableau Server
+tableau_auth = TSC.TableauAuth('admin_username', 'admin_password')  # No site_id for server-wide access
+server = TSC.Server('https://tableau-server-url', use_server_version=True)
+
+# Function to log removed users into a CSV
+csv_file = 'removed_users.csv'
+
+def log_removed_user(site_name, user_name, user_email):
+    try:
+        with open(csv_file, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([site_name, user_name, user_email])
+    except Exception as e:
+        logging.error(f"Error writing to CSV file: {str(e)}")
+
+# Function to reassign content to orphan user
+def reassign_content_to_orphan(server, orphan_user_id, user_id):
+    try:
+        req_option = TSC.RequestOptions()
+        req_option.filter.add(TSC.Filter(TSC.RequestOptions.Field.OwnerId, TSC.RequestOptions.Operator.Equals, user_id))
+
+        # Reassign workbooks
+        workbooks, pagination_item = server.workbooks.get(req_option)
+        for workbook in workbooks:
+            logging.info(f"Reassigning workbook {workbook.name} (ID: {workbook.id}) to orphan user.")
+            workbook.owner_id = orphan_user_id
+            server.workbooks.update(workbook)
+
+        # Reassign datasources
+        datasources, pagination_item = server.datasources.get(req_option)
+        for datasource in datasources:
+            logging.info(f"Reassigning datasource {datasource.name} (ID: {datasource.id}) to orphan user.")
+            datasource.owner_id = orphan_user_id
+            server.datasources.update(datasource)
+    except Exception as e:
+        logging.error(f"Error during content reassignment: {str(e)}")
+
+# Initialize CSV with headers
+try:
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Site Name', 'User Name', 'Email'])
+except Exception as e:
+    logging.error(f"Error initializing CSV file: {str(e)}")
+
+# Function to send email with log and CSV files
+def send_email():
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = SENDER_EMAIL
+        msg['To'] = RECIPIENT_EMAIL
+        msg['Subject'] = 'Tableau Unlicensed Users Removal Audit'
+
+        body = 'Attached are the log and CSV files for unlicensed user removal from Tableau.'
+
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Attach log file
+        with open(log_file, 'rb') as log_attachment:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(log_attachment.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename= {log_file}')
+            msg.attach(part)
+
+        # Attach CSV file
+        with open(csv_file, 'rb') as csv_attachment:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(csv_attachment.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename= {csv_file}')
+            msg.attach(part)
+
+        # Send email
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        text = msg.as_string()
+        server.sendmail(SENDER_EMAIL, RECIPIENT_EMAIL, text)
+        server.quit()
+
+        logging.info("Audit email sent successfully.")
+    except Exception as e:
+        logging.error(f"Error sending email: {str(e)}")
+
+# Main operation
+try:
+    with server.auth.sign_in(tableau_auth):
+        logging.info("Successfully signed into Tableau Server.")
+        
+        # Get all sites from the server
+        all_sites, pagination_item = server.sites.get()
+
+        # Loop through all sites
+        for site in all_sites:
+            server.auth.switch_site(site)  # Switch to the current site
+            logging.info(f"Switched to site: {site.name}")
+
+            # Get the orphan user ID (assuming "orphanuser" exists on every site)
+            try:
+                orphan_user = server.users.get_by_name('orphanuser')
+                orphan_user_id = orphan_user.id
+            except Exception as e:
+                logging.error(f"Error retrieving orphan user on site {site.name}: {str(e)}")
+                continue
+
+            # Get all users from the current site
+            all_users, pagination_item = server.users.get()
+
+            # Loop through users and remove the unlicensed ones
+            for user in all_users:
+                if user.site_role == 'Unlicensed':
+                    logging.info(f"Found unlicensed user: {user.name} on site: {site.name}")
+
+                    # Reassign content to orphan user before removing
+                    reassign_content_to_orphan(server, orphan_user_id, user.id)
+
+                    # Remove the unlicensed user
+                    try:
+                        server.users.remove(user)
+                        logging.info(f"Removed user: {user.name} from site: {site.name}")
+                        # Log the removed user to CSV
+                        log_removed_user(site.name, user.name, user.email)
+                    except Exception as e:
+                        logging.error(f"Error removing user {user.name} from site {site.name}: {str(e)}")
+
+        logging.info("All unlicensed users have been reassigned and removed.")
+
+except Exception as e:
+    logging.error(f"Error during main operation: {str(e)}")
+
+# Send the email after the process is completed
+send_email()
