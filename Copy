@@ -1,0 +1,13 @@
+# Define the source and target file paths
+source_file = '/path/to/source/file.txt' # Replace with actual source path
+target_file = '/path/to/target/file.txt' # Replace with actual target path
+
+# Use a bash resource to copy the file with the same permissions
+bash 'copy_file_with_permissions' do
+  code <<-EOH
+    # Copy the file from source to target
+    cp --preserve=mode "#{source_file}" "#{target_file}"
+  EOH
+  action :run
+  not_if { ::File.exist?(target_file) && FileUtils.compare_file(source_file, target_file) }
+end
