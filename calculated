@@ -1,0 +1,21 @@
+query getAllCalculatedFields($first: Int, $after: String) {
+  calculatedFieldsConnection(first: $first, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    edges {
+      node {
+        name
+        formula
+        datasource {
+          name
+          workbook {
+            name
+            projectName
+          }
+        }
+      }
+    }
+  }
+}
