@@ -18,3 +18,90 @@ def extract_functions_from_formula(formula):
     # Regular expression pattern to capture function names (e.g., SUM, AVG, etc.)
     function_pattern = r'\b([A-Z]+)\b'
     return re.findall(function_pattern, formula)
+
+
+
+import re
+
+# Step 1: Full list of all Tableau functions (updated)
+tableau_functions = [
+    # Aggregate Functions
+    'AVG', 'COUNT', 'COUNTD', 'MAX', 'MEDIAN', 'MIN', 'STDEV', 'STDEVP', 'SUM', 'VAR', 'VARP',
+
+    # Date Functions
+    'DATE', 'DATEADD', 'DATEDIFF', 'DATENAME', 'DATEPARSE', 'DATEPART', 'DATETRUNC', 
+    'MAKEDATE', 'MAKEDATETIME', 'MAKETIME', 'NOW', 'TODAY', 'YEAR', 'MONTH', 'DAY', 'HOUR', 
+    'MINUTE', 'SECOND', 'WEEK', 'WEEKDAY', 'ISOYEAR', 'ISOWEEK', 'ISOWEEKDAY',
+
+    # Logical Functions
+    'IF', 'IIF', 'CASE', 'ISNULL', 'ZN', 'AND', 'OR', 'NOT',
+
+    # Number Functions
+    'ABS', 'CEILING', 'EXP', 'FLOOR', 'LN', 'LOG', 'PI', 'POWER', 'ROUND', 'SIGN', 'SQRT',
+
+    # String Functions
+    'CONTAINS', 'ENDSWITH', 'FIND', 'LEFT', 'LEN', 'LOWER', 'LTRIM', 'MID', 'RIGHT', 'RTRIM',
+    'SPACE', 'STARTSWITH', 'TRIM', 'UPPER', 'REPLACE', 'SPLIT', 'ASCII', 'CHAR', 'REGEXP_EXTRACT',
+    'REGEXP_REPLACE', 'REGEXP_MATCH',
+
+    # Table Calculation Functions
+    'INDEX', 'FIRST', 'LAST', 'LOOKUP', 'PREVIOUS_VALUE', 'RANK', 'RANK_DENSE', 'RANK_MODIFIED', 
+    'RANK_UNIQUE', 'RUNNING_SUM', 'RUNNING_AVG', 'RUNNING_COUNT', 'RUNNING_MAX', 'RUNNING_MIN', 
+    'RUNNING_STDEV', 'RUNNING_VAR', 'WINDOW_SUM', 'WINDOW_AVG', 'WINDOW_COUNT', 'WINDOW_MAX', 
+    'WINDOW_MIN', 'WINDOW_STDEV', 'WINDOW_VAR', 'TOTAL',
+
+    # Type Conversion Functions
+    'FLOAT', 'INT', 'STR', 'DATEVALUE',
+
+    # User Functions
+    'FULLNAME', 'ISMEMBEROF', 'ISFULLNAME', 'USERNAME',
+
+    # Miscellaneous Functions
+    'ATTR', 'EXCLUDE', 'INCLUDE', 'FIXED', 'LEVEL', 'SIZE',
+
+    # Geographical Functions
+    'DISTANCE', 'LATITUDE', 'LONGITUDE', 'MAKEPOINT', 'MAKELINE',
+
+    # Other Functions
+    'RANDOM', 'UUID',
+
+    # Statistical Functions
+    'PERCENTILE', 'PERCENTILE_CONT', 'PERCENTILE_DISC', 'COVAR', 'COVAR_POP', 'COVAR_SAMP',
+    'CORR', 'VARIANCE', 'VARIANCE_POP', 'VARIANCE_SAMP',
+
+    # Time Functions
+    'TIMESTAMP', 'DATETIME', 'TIME', 'DATE_TRUNC', 'TIMESTAMPDIFF'
+]
+
+# Create a pattern from the known functions (case-sensitive matching)
+functions_pattern = r'\b(' + '|'.join(tableau_functions) + r')\b'
+
+# Step 2: Define a function to extract functions from a formula
+def extract_tableau_functions(formula):
+    # Find all known Tableau functions used in the formula
+    matches = re.findall(functions_pattern, formula)
+    return matches
+
+# Step 3: Test formula strings
+formulas = [
+    "SUM([Sales]) + AVG([Profit]) / COUNTD([OrderID])",
+    "IF ISNULL([Profit]) THEN 0 ELSE [Profit] END",
+    "DATEDIFF('day', [Order Date], NOW())",
+    "WINDOW_SUM(SUM([Sales])) / TOTAL(SUM([Sales]))",
+    "RANK(AVG([Sales])) OVER (ORDER BY [Profit])",
+    "MAKELINE([Latitude], [Longitude])",
+    "DATEADD('month', 3, [Order Date])",
+    "DATETRUNC('quarter', [Order Date])",
+    "YEAR([Ship Date]) - YEAR([Order Date])",
+    "PERCENTILE([Sales], 0.5)",
+    "CORR([Sales], [Profit])"
+]
+
+# Step 4: Iterate through the formulas and find the used functions
+result = {}
+for i, formula in enumerate(formulas):
+    result[f"Formula {i+1}"] = extract_tableau_functions(formula)
+
+# Step 5: Print the result (which function is used in each formula)
+print(result)
+
