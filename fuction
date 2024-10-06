@@ -1,0 +1,15 @@
+def build_function_list(calculated_fields):
+    function_list = []
+    for field in calculated_fields:
+        formula = field['formula']
+        functions_used = extract_functions_from_formula(formula)
+        if functions_used:
+            function_list.append({
+                'calculated_field_name': field['name'],
+                'functions': list(set(functions_used)),  # Unique functions used in the formula
+                'formula': formula,
+                'datasource_name': field['datasource']['name'],
+                'workbook_name': field['datasource']['workbook']['name'],
+                'project_name': field['datasource']['workbook']['projectName']
+            })
+    return function_list
