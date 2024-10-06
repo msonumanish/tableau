@@ -13,3 +13,8 @@ def build_function_list(calculated_fields):
                 'project_name': field['datasource']['workbook']['projectName']
             })
     return function_list
+
+def extract_functions_from_formula(formula):
+    # Regular expression pattern to capture function names (e.g., SUM, AVG, etc.)
+    function_pattern = r'\b([A-Z]+)\b'
+    return re.findall(function_pattern, formula)
